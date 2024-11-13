@@ -1,11 +1,12 @@
-apache-airflow[celery]==2.6.1
-psycopg2-binary==2.9.3
-Faker==8.10.3
-pandas==1.3.3
+apache-airflow[celery]==2.10.3
+psycopg2-binary==2.9.10
+pandas==2.2.3
 duckdb
 celery
 redis
 setuptools
 python-daemon
 flower
-airflow-dbt
+astronomer-cosmos==1.7.1
+apache-airflow-providers-postgres==5.13.1
+dbt-postgres==1.8.2

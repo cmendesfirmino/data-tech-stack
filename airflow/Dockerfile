@@ -1,4 +1,4 @@
-FROM apache/airflow:2.6.1-python3.9
+FROM apache/airflow:slim-2.10.3-python3.12
 
 USER root
 RUN apt-get update && apt-get install -y \
@@ -18,7 +18,7 @@ USER airflow
 # Copy requirements.txt and install dependencies
 COPY requirements.txt /requirements.txt
 RUN pip install --upgrade pip
-RUN pip install dbt-core dbt-postgres
+# RUN pip install dbt-core dbt-postgres
 RUN pip install --no-cache-dir -r /requirements.txt
 
 # Set environment variables

@@ -1,41 +1,40 @@
-version: "3.9"
-
 services:
-  airflowdb:
-    image: postgres:13
+  postgres_data:
+    image: postgres:15
     ports:
-      - "5433:5432"
+      - "5432:5432"
     environment:
-      POSTGRES_DB: airflow
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - ./pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d airflow"]
-      interval: 30s
-      timeout: 60s
-      retries: 5
-      start_period: 80s
+      - ./init-db:/docker-entrypoint-initdb.d/
+    command: ["/bin/bash", "-c", "echo \"-- Create databases
 
-  company_dw:
-    image: postgres:13
-    ports:
-      - "5435:5432"
-    environment:
-      POSTGRES_DB: company_dw
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+                CREATE DATABASE airflow;
+                CREATE DATABASE superset;
+                CREATE DATABASE warehouse;
+
+                -- Create users with passwords
+
+                CREATE USER ${AIRFLOW_WWW_USER_USERNAME} WITH PASSWORD '${AIRFLOW_WWW_USER_PASSWORD}';
+                CREATE USER ${SUPERSET_ADMIN} WITH PASSWORD '${SUPERSET_PASSWORD}';
+                CREATE USER ${DW_USER} WITH PASSWORD '${DW_PASSWORD}';
+
+                -- Grant privileges to users on their respective databases
+
+                GRANT ALL PRIVILEGES ON DATABASE airflow TO ${AIRFLOW_WWW_USER_USERNAME};
+                GRANT ALL PRIVILEGES ON DATABASE superset TO ${SUPERSET_ADMIN};
+                GRANT ALL PRIVILEGES ON DATABASE warehouse TO ${DW_USER};
+                \" > /docker-entrypoint-initdb.d/init.sql && docker-entrypoint.sh postgres"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d company_dw"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d postgres"]
       interval: 30s
       timeout: 60s
       retries: 5
       start_period: 80s
-    volumes:
-      - company_dw_data:/var/lib/postgresql/data
-      - ./postgres_datawarehouse/postgresql.conf:/etc/postgresql/postgresql.conf
-    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    restart: always
+
 
   redis:
     image: redis:latest
@@ -57,14 +56,14 @@ services:
       AIRFLOW__CORE__FERNET_KEY: GmhP3ADRHscUZ2z_ohwMOmXlu5jFSI5IQRG0s-KrV_Y=
       AIRFLOW__WEBSERVER__SECRET_KEY: G8ZbXirwKyqoV6DvfotU-qIQrTB77iW5shFBR4L3PKk
       AIRFLOW__WEBSERVER__JWT_SECRET: zKyRQkchRLhbv4DzXXra5Pbq6jJ-3aZG6SmLWqFCSKw
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@airflowdb:5432/airflow
-      AIRFLOW_CONN_COMPANY_DW: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@company_dw:5432/company_dw
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_data:5432/airflow
+      AIRFLOW_CONN_COMPANY_DW: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_data:5432/warehouse
       AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
-      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@airflowdb:5432/airflow
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_data:5432/airflow
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: False
     entrypoint: ["/entrypoint.sh", "db", "init"]
     depends_on:
-      airflowdb:
+      postgres_data:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -80,10 +79,10 @@ services:
       AIRFLOW__CORE__FERNET_KEY: GmhP3ADRHscUZ2z_ohwMOmXlu5jFSI5IQRG0s-KrV_Y=
       AIRFLOW__WEBSERVER__SECRET_KEY: G8ZbXirwKyqoV6DvfotU-qIQrTB77iW5shFBR4L3PKk
       AIRFLOW__WEBSERVER__JWT_SECRET: zKyRQkchRLhbv4DzXXra5Pbq6jJ-3aZG6SmLWqFCSKw
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@airflowdb:5432/airflow
-      AIRFLOW_CONN_COMPANY_DW: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@company_dw:5432/company_dw
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_data:5432/airflow
+      AIRFLOW_CONN_COMPANY_DW: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_data:5432/warehouse
       AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
-      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@airflowdb:5432/airflow
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_data:5432/airflow
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: False
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -125,13 +124,13 @@ services:
       AIRFLOW__CORE__FERNET_KEY: GmhP3ADRHscUZ2z_ohwMOmXlu5jFSI5IQRG0s-KrV_Y=
       AIRFLOW__WEBSERVER__SECRET_KEY: G8ZbXirwKyqoV6DvfotU-qIQrTB77iW5shFBR4L3PKk
       AIRFLOW__WEBSERVER__JWT_SECRET: zKyRQkchRLhbv4DzXXra5Pbq6jJ-3aZG6SmLWqFCSKw
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@airflowdb:5432/airflow
-      AIRFLOW_CONN_COMPANY_DW: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@company_dw:5432/company_dw
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_data:5432/airflow
+      AIRFLOW_CONN_COMPANY_DW: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_data:5432/warehouse
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: False
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
-      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@airflowdb:5432/airflow
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_data:5432/airflow
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./dbt:/opt/airflow/dbt
@@ -170,10 +169,10 @@ services:
       AIRFLOW__CORE__FERNET_KEY: GmhP3ADRHscUZ2z_ohwMOmXlu5jFSI5IQRG0s-KrV_Y=
       AIRFLOW__WEBSERVER__SECRET_KEY: G8ZbXirwKyqoV6DvfotU-qIQrTB77iW5shFBR4L3PKk
       AIRFLOW__WEBSERVER__JWT_SECRET: zKyRQkchRLhbv4DzXXra5Pbq6jJ-3aZG6SmLWqFCSKw
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@airflowdb:5432/airflow
-      AIRFLOW_CONN_COMPANY_DW: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@company_dw:5432/company_dw
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_data:5432/airflow
+      AIRFLOW_CONN_COMPANY_DW: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_data:5432/warehouse
       AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
-      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@airflowdb:5432/airflow
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_data:5432/airflow
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: False
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
       AIRFLOW__CORE__LOGGING_LEVEL: "INFO"
@@ -208,23 +207,6 @@ services:
         condition: service_healthy
 
 
-  superset_db:
-    image: postgres:13
-    ports:
-      - "5434:5432"
-    environment:
-      POSTGRES_DB: superset
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d superset"]
-      interval: 30s
-      timeout: 60s
-      retries: 5
-      start_period: 80s
-    volumes:
-      - superset_db_data:/var/lib/postgresql/data
-
   superset:
     build:
       context: ./superset
@@ -236,20 +218,24 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
-      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@superset_db:5432/superset
+      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_data:5432/superset
     ports:
       - "8088:8088"
     volumes:
       - superset_home:/app/superset_home
     command: /app/init_superset.sh
     depends_on:
-      - superset_db
+      - postgres_data
 
 networks:
   default:
     driver: bridge
 
+# volumes:
+#   superset_db_data:
+#   superset_home:
+#   company_dw_data:
+
 volumes:
-  superset_db_data:
+  postgres_data:
   superset_home:
-  company_dw_data:

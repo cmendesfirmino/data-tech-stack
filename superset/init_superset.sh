@@ -12,7 +12,7 @@ if [ -z "$POSTGRES_PASSWORD" ]; then
 fi
 
 # Wait for the database to be ready
-while ! pg_isready -h superset_db -p 5432 -U ${POSTGRES_USER}; do
+while ! pg_isready -h postgres_data -p 5432 -U ${POSTGRES_USER}; do
   echo "Waiting for PostgreSQL to be ready..."
   sleep 5
 done
